@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIEM Otomatik Kural Oluşturucu</title>
+    <title>SIEM Otomatik Kural Oluşturucu (Güvenli Proxy)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -20,7 +20,7 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
         
-        /* Yeni: Devre dışı bırakıldığında butona uygulanacak sınıf */
+        /* Devre dışı bırakıldığında butona uygulanacak sınıf (JS tarafından yönetilir) */
         .btn-disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -28,9 +28,7 @@
         }
     </style>
     <script>
-        // ÖNEMLİ: API Anahtarı buraya dahil EDİLMİYOR.
-        // API isteği, güvenli bir şekilde Vercel Serverless Function'a yönlendirilecektir.
-        
+        // ÖNEMLİ: Artık doğrudan API'ye değil, Vercel Serverless Function'a çağrı yapılacak.
         const PROXY_URL = '/api/generate'; // Vercel'da oluşturulan Serverless Function yolu
 
         // Global UI durum değişkenleri
@@ -63,16 +61,18 @@
          * Seçilen SIEM'e göre kural oluşturma işlemini başlatır.
          */
         async function generateRule() {
+            // Buton ve yüklenme elemanlarını al
+            const generateButton = document.getElementById('generateButton');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
             if (isGenerating) return;
 
             const siemSelect = document.getElementById('siemPlatform');
             const ruleInput = document.getElementById('ruleInput');
             const ruleOutput = document.getElementById('ruleOutput');
-            const loadingIndicator = document.getElementById('loadingIndicator');
             const sourceAttributions = document.getElementById('sourceAttributions');
             const copyButton = document.getElementById('copyButton');
             const errorArea = document.getElementById('errorArea');
-            const generateButton = document.getElementById('generateButton');
 
             // Temizle
             ruleOutput.innerHTML = '';
@@ -93,9 +93,10 @@
             isGenerating = true;
             loadingIndicator.classList.remove('hidden');
             generateButton.disabled = true; // Butonu devre dışı bırak
-            generateButton.classList.add('btn-disabled'); // Yeni: Opaklık sınıfını ekle
+            generateButton.classList.add('btn-disabled'); // Opaklık sınıfını ekle
 
-            // Arka uca göndereceğimiz payload'u oluştur
+            // Sadece gerekli kullanıcı girdilerini Serverless Function'a gönderiyoruz.
+            // Prompt oluşturma ve API anahtarı kullanımı artık arka uçta (api/generate.js) yapılacak.
             const payload = {
                 siemPlatform: siemPlatform,
                 userRequest: userRequest,
@@ -103,7 +104,7 @@
             };
 
             try {
-                // Kendi Vercel fonksiyonumuzu çağırıyoruz
+                // Vercel Serverless Function'ı çağırıyoruz
                 const response = await fetchWithBackoff(PROXY_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -121,7 +122,7 @@
                     
                     copyButton.classList.remove('hidden');
 
-                    // Kaynak Atıflarını Çıkar
+                    // Kaynak Atıflarını Çıkar (Grounding)
                     const sources = result.sources || [];
 
                     if (sources.length > 0) {
@@ -144,7 +145,7 @@
                 isGenerating = false;
                 loadingIndicator.classList.add('hidden');
                 generateButton.disabled = false; // Butonu tekrar etkinleştir
-                generateButton.classList.remove('btn-disabled'); // Yeni: Opaklık sınıfını kaldır
+                generateButton.classList.remove('btn-disabled'); // Opaklık sınıfını kaldır
             }
         }
 
@@ -237,7 +238,7 @@
                     </select>
                 </div>
 
-                <!-- Kural Adı (Placeholder, LLM Prompt'a dahil edilecek) -->
+                <!-- Kural Adı (Prompt'a dahil edilecek) -->
                 <div class="md:col-span-2">
                     <label for="ruleName" class="block text-sm font-medium text-gray-300 mb-2">
                         2. Kural Adı (Önerilen)
@@ -257,7 +258,7 @@
             <div id="errorArea" class="text-red-500 text-sm mb-4"></div>
 
             <!-- İşlem Butonu -->
-            <button onclick="generateRule()" id="generateButton" class="w-full bg-accent hover:bg-opacity-90 text-dark-900 font-bold py-3 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-[1.01] flex items-center justify-center">
+            <button onclick="generateRule()" id="generateButton" class="w-full bg-accent hover:bg-opacity-90 text-dark-900 font-bold py-3 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-[1.01] flex items-center justify-center disabled:opacity-50" :disabled="isGenerating">
                 <span id="buttonText">Kuralı Otomatik Üret</span>
                 <svg id="loadingIndicator" class="animate-spin -ml-1 mr-3 h-5 w-5 text-dark-900 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
