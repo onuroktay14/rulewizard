@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIEM Otomatik Kural Oluşturucu</title>
+    <title>SIEM Otomatik Kural Oluşturucu (Güvenli Proxy)</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -21,10 +21,10 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
     </style>
     <script>
-        // Firebase ve API ayarları için global değişkenler (Canvas tarafından sağlanır)
-        const apiKey = ""; // Gemini API anahtarı
-        const API_MODEL = "gemini-2.5-flash-preview-09-2025";
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${API_MODEL}:generateContent?key=${apiKey}`;
+        // ÖNEMLİ: API Anahtarı artık buraya dahil EDİLMİYOR.
+        // API isteği, güvenli bir şekilde Vercel Serverless Function'a yönlendirilecektir.
+        
+        const PROXY_URL = '/api/generate'; // Vercel'da oluşturacağınız Serverless Function yolu
 
         // Global UI durum değişkenleri
         let isGenerating = false;
@@ -35,11 +35,9 @@
                 try {
                     const response = await fetch(url, options);
                     if (!response.ok) {
-                        // 429 Too Many Requests için özel işlem
-                        if (response.status === 429 && attempt < maxRetries - 1) {
-                            throw new Error('429 Rate Limit Exceeded - Retrying');
-                        }
-                        throw new Error(`HTTP error! Status: ${response.status}`);
+                        // Vercel Fonksiyonundan gelen hata mesajlarını yakala
+                        const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen Arka Uç Hatası' }));
+                        throw new Error(`Arka Uç Hatası (${response.status}): ${errorData.message || 'API isteği başarısız oldu.'}`);
                     }
                     return response;
                 } catch (error) {
@@ -48,8 +46,7 @@
                         const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
                         await new Promise(resolve => setTimeout(resolve, delay));
                     } else {
-                        // Son denemede başarısız oldu
-                        throw new Error("API isteği başarısız oldu. Lütfen daha sonra tekrar deneyin.");
+                        throw new Error(`API isteği başarısız oldu. Hata: ${error.message}`);
                     }
                 }
             }
@@ -77,6 +74,8 @@
 
             const siemPlatform = siemSelect.value;
             const userRequest = ruleInput.value.trim();
+            const ruleName = document.getElementById('ruleName').value.trim();
+
 
             if (!siemPlatform || !userRequest) {
                 errorArea.textContent = 'Lütfen bir SIEM Platformu seçin ve kural talebinizi girin.';
@@ -85,56 +84,26 @@
 
             isGenerating = true;
             loadingIndicator.classList.remove('hidden');
-            
-            // SIEM Platformu ve Syntax bilgisi
-            let syntaxInfo;
-            switch(siemPlatform) {
-                case 'Splunk':
-                    syntaxInfo = "Splunk Search Processing Language (SPL)";
-                    break;
-                case 'QRadar':
-                    syntaxInfo = "QRadar AQL veya QID/LEF tabanlı kural/arama sintaksı";
-                    break;
-                case 'LogSign':
-                    syntaxInfo = "LogSign Query Language (LQL) sintaksı";
-                    break;
-                case 'Wazuh':
-                    syntaxInfo = "Wazuh Manager XML Kural Sintaksı (Decoders, Ruleset)";
-                    break;
-                default:
-                    syntaxInfo = "genel SIEM kural sintaksı";
-            }
 
-            const systemPrompt = `Sen bir kıdemli Siber Güvenlik Analisti ve SIEM Kural Geliştiricisiniz. Görevin, kullanıcının talebini alıp, seçilen SIEM platformuna ait doğru ve çalışır kural kodunu üretmektir.
-            
-            1. Ürettiğiniz kural, hedef platformun (örn: ${siemPlatform}) güncel sintaks yapısına (${syntaxInfo}) tam olarak uymalıdır.
-            2. Kuralın içine, kuralın amacını, hangi log kaynaklarını hedeflediğini ve neden önemli olduğunu açıklayan kısa Türkçe yorumlar ekleyin.
-            3. Yanıtınız sadece kural kodunu içermelidir (ekstra konuşma metni veya açıklama OLMAMALIDIR).
-            4. Kural için gerekli tüm alan isimleri (field names) ve değerleri doğru bir şekilde kullanılmalıdır.
-            5. Talep, güncel tehditlere dayanıyorsa (örneğin Powershell komutları), güncel bilgi kullanın.
-            `;
-
-            const userQuery = `Platform: ${siemPlatform}. Talep: "${userRequest}". Bu talebe uygun, çalışır ve yorumlanmış bir ${siemPlatform} kuralı üret.`;
-
+            // Arka uca göndereceğimiz payload'u oluştur
             const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
-                // Google Search'ü etkinleştirerek güncel tehditler ve doğru sintaks hakkında bilgi alınır.
-                tools: [{ "google_search": {} }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
+                siemPlatform: siemPlatform,
+                userRequest: userRequest,
+                ruleName: ruleName
             };
 
             try {
-                const response = await fetchWithBackoff(API_URL, {
+                // Kendi Vercel fonksiyonumuzu çağırıyoruz
+                const response = await fetchWithBackoff(PROXY_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
                 const result = await response.json();
-                const candidate = result.candidates?.[0];
-
-                if (candidate && candidate.content?.parts?.[0]?.text) {
-                    const text = candidate.content.parts[0].text;
+                
+                if (result.text) {
+                    const text = result.text;
                     
                     // Kural kodunu temiz ve formatlı göster
                     const formattedCode = `<pre class="custom-scrollbar p-4 bg-dark-800 text-green-400 rounded-lg overflow-auto border border-gray-700">${escapeHtml(text)}</pre>`;
@@ -142,17 +111,8 @@
                     
                     copyButton.classList.remove('hidden');
 
-                    // Kaynak Atıflarını Çıkar (Grounding)
-                    let sources = [];
-                    const groundingMetadata = candidate.groundingMetadata;
-                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
-                        sources = groundingMetadata.groundingAttributions
-                            .map(attribution => ({
-                                uri: attribution.web?.uri,
-                                title: attribution.web?.title,
-                            }))
-                            .filter(source => source.uri && source.title);
-                    }
+                    // Kaynak Atıflarını Çıkar
+                    const sources = result.sources || [];
 
                     if (sources.length > 0) {
                         let sourceHtml = '<p class="text-xs text-gray-400 mt-4 mb-2">Bilgi Kaynakları (Sintaks/Tehdit):</p><ul class="list-disc list-inside text-sm text-gray-500">';
@@ -164,12 +124,12 @@
                     }
 
                 } else {
-                    errorArea.textContent = 'Kural oluşturulamadı. Lütfen talebinizi daha açık veya farklı bir şekilde yeniden yazmayı deneyin.';
+                    errorArea.textContent = 'Kural oluşturulamadı veya arka uçtan beklenmedik bir yanıt geldi.';
                 }
 
             } catch (error) {
-                console.error("API Error:", error);
-                errorArea.textContent = `Bir hata oluştu: ${error.message}`;
+                console.error("Fetch Error:", error);
+                errorArea.textContent = `${error.message}`;
             } finally {
                 isGenerating = false;
                 loadingIndicator.classList.add('hidden');
@@ -185,7 +145,7 @@
                  .replace(/</g, "&lt;")
                  .replace(/>/g, "&gt;")
                  .replace(/"/g, "&quot;")
-                 .replace(/'/g, "&#039;");
+                 .replace(/'/g, "&#039;');
         }
 
         /**
@@ -193,7 +153,6 @@
          */
         function copyRule() {
             const ruleText = document.querySelector('#ruleOutput pre').textContent;
-            // execCommand('copy') iframe'lerde navigator.clipboard'dan daha güvenilirdir
             const textarea = document.createElement('textarea');
             textarea.value = ruleText;
             document.body.appendChild(textarea);
@@ -221,7 +180,6 @@
             setTimeout(() => {
                 toast.classList.remove('opacity-100', 'scale-100');
                 toast.classList.add('opacity-0', 'scale-90');
-                // Gizlemeden önce animasyonun bitmesini bekle
                 setTimeout(() => toast.classList.add('hidden'), 500);
             }, 3000);
         }
@@ -231,7 +189,7 @@
             const ruleInput = document.getElementById('ruleInput');
             ruleInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault(); // Yeni satır eklemeyi engelle
+                    e.preventDefault();
                     generateRule();
                 }
             });
@@ -320,6 +278,9 @@
                 Bu araç, 
                 <a href="https://www.linkedin.com/in/onuroktaycom/" target="_blank" class="text-accent hover:text-white transition duration-200 font-medium">Onur Oktay</a>
                 tarafından üretilmiştir.
+            </p>
+            <p class="mt-2 text-red-400 font-medium">
+                Bu uygulama, Gemini API Anahtarını gizlemek için Vercel Serverless Function kullanır.
             </p>
         </footer>
         
