@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIEM Otomatik Kural Oluşturucu</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Modern, Inter font */
+        body { font-family: 'Inter', sans-serif; }
+        /* Dark theme for a professional security tool look */
+        .bg-dark-900 { background-color: #121212; }
+        .bg-dark-800 { background-color: #1f1f1f; }
+        .text-accent { color: #00bcd4; /* Cyan/Teal accent */ }
+        
+        /* Custom scrollbar for dark theme */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #121212; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+    </style>
+    <script>
+        // Firebase ve API ayarları için global değişkenler (Canvas tarafından sağlanır)
+        const apiKey = ""; // Gemini API anahtarı
+        const API_MODEL = "gemini-2.5-flash-preview-09-2025";
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${API_MODEL}:generateContent?key=${apiKey}`;
+
+        // Global UI durum değişkenleri
+        let isGenerating = false;
+
+        // Utility: Exponential Backoff ile Fetch
+        async function fetchWithBackoff(url, options, maxRetries = 5) {
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        // 429 Too Many Requests için özel işlem
+                        if (response.status === 429 && attempt < maxRetries - 1) {
+                            throw new Error('429 Rate Limit Exceeded - Retrying');
+                        }
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response;
+                } catch (error) {
+                    console.warn(`Attempt ${attempt + 1} failed: ${error.message}. Retrying...`);
+                    if (attempt < maxRetries - 1) {
+                        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    } else {
+                        // Son denemede başarısız oldu
+                        throw new Error("API isteği başarısız oldu. Lütfen daha sonra tekrar deneyin.");
+                    }
+                }
+            }
+        }
+
+        /**
+         * Seçilen SIEM'e göre kural oluşturma işlemini başlatır.
+         */
+        async function generateRule() {
+            if (isGenerating) return;
+
+            const siemSelect = document.getElementById('siemPlatform');
+            const ruleInput = document.getElementById('ruleInput');
+            const ruleOutput = document.getElementById('ruleOutput');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const sourceAttributions = document.getElementById('sourceAttributions');
+            const copyButton = document.getElementById('copyButton');
+            const errorArea = document.getElementById('errorArea');
+
+            // Temizle
+            ruleOutput.innerHTML = '';
+            sourceAttributions.innerHTML = '';
+            errorArea.textContent = '';
+            copyButton.classList.add('hidden');
+
+            const siemPlatform = siemSelect.value;
+            const userRequest = ruleInput.value.trim();
+
+            if (!siemPlatform || !userRequest) {
+                errorArea.textContent = 'Lütfen bir SIEM Platformu seçin ve kural talebinizi girin.';
+                return;
+            }
+
+            isGenerating = true;
+            loadingIndicator.classList.remove('hidden');
+            
+            // SIEM Platformu ve Syntax bilgisi
+            let syntaxInfo;
+            switch(siemPlatform) {
+                case 'Splunk':
+                    syntaxInfo = "Splunk Search Processing Language (SPL)";
+                    break;
+                case 'QRadar':
+                    syntaxInfo = "QRadar AQL veya QID/LEF tabanlı kural/arama sintaksı";
+                    break;
+                case 'LogSign':
+                    syntaxInfo = "LogSign Query Language (LQL) sintaksı";
+                    break;
+                case 'Wazuh':
+                    syntaxInfo = "Wazuh Manager XML Kural Sintaksı (Decoders, Ruleset)";
+                    break;
+                default:
+                    syntaxInfo = "genel SIEM kural sintaksı";
+            }
+
+            const systemPrompt = `Sen bir kıdemli Siber Güvenlik Analisti ve SIEM Kural Geliştiricisiniz. Görevin, kullanıcının talebini alıp, seçilen SIEM platformuna ait doğru ve çalışır kural kodunu üretmektir.
+            
+            1. Ürettiğiniz kural, hedef platformun (örn: ${siemPlatform}) güncel sintaks yapısına (${syntaxInfo}) tam olarak uymalıdır.
+            2. Kuralın içine, kuralın amacını, hangi log kaynaklarını hedeflediğini ve neden önemli olduğunu açıklayan kısa Türkçe yorumlar ekleyin.
+            3. Yanıtınız sadece kural kodunu içermelidir (ekstra konuşma metni veya açıklama OLMAMALIDIR).
+            4. Kural için gerekli tüm alan isimleri (field names) ve değerleri doğru bir şekilde kullanılmalıdır.
+            5. Talep, güncel tehditlere dayanıyorsa (örneğin Powershell komutları), güncel bilgi kullanın.
+            `;
+
+            const userQuery = `Platform: ${siemPlatform}. Talep: "${userRequest}". Bu talebe uygun, çalışır ve yorumlanmış bir ${siemPlatform} kuralı üret.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                // Google Search'ü etkinleştirerek güncel tehditler ve doğru sintaks hakkında bilgi alınır.
+                tools: [{ "google_search": {} }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            try {
+                const response = await fetchWithBackoff(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    const text = candidate.content.parts[0].text;
+                    
+                    // Kural kodunu temiz ve formatlı göster
+                    const formattedCode = `<pre class="custom-scrollbar p-4 bg-dark-800 text-green-400 rounded-lg overflow-auto border border-gray-700">${escapeHtml(text)}</pre>`;
+                    ruleOutput.innerHTML = formattedCode;
+                    
+                    copyButton.classList.remove('hidden');
+
+                    // Kaynak Atıflarını Çıkar (Grounding)
+                    let sources = [];
+                    const groundingMetadata = candidate.groundingMetadata;
+                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                        sources = groundingMetadata.groundingAttributions
+                            .map(attribution => ({
+                                uri: attribution.web?.uri,
+                                title: attribution.web?.title,
+                            }))
+                            .filter(source => source.uri && source.title);
+                    }
+
+                    if (sources.length > 0) {
+                        let sourceHtml = '<p class="text-xs text-gray-400 mt-4 mb-2">Bilgi Kaynakları (Sintaks/Tehdit):</p><ul class="list-disc list-inside text-sm text-gray-500">';
+                        sources.forEach((source, index) => {
+                            sourceHtml += `<li><a href="${source.uri}" target="_blank" class="hover:text-accent truncate" title="${source.title}">${source.title}</a></li>`;
+                        });
+                        sourceHtml += '</ul>';
+                        sourceAttributions.innerHTML = sourceHtml;
+                    }
+
+                } else {
+                    errorArea.textContent = 'Kural oluşturulamadı. Lütfen talebinizi daha açık veya farklı bir şekilde yeniden yazmayı deneyin.';
+                }
+
+            } catch (error) {
+                console.error("API Error:", error);
+                errorArea.textContent = `Bir hata oluştu: ${error.message}`;
+            } finally {
+                isGenerating = false;
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        /**
+         * HTML özel karakterlerinden kaçar.
+         */
+        function escapeHtml(unsafe) {
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
+        /**
+         * Kural kodunu panoya kopyalar.
+         */
+        function copyRule() {
+            const ruleText = document.querySelector('#ruleOutput pre').textContent;
+            // execCommand('copy') iframe'lerde navigator.clipboard'dan daha güvenilirdir
+            const textarea = document.createElement('textarea');
+            textarea.value = ruleText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                const successful = document.execCommand('copy');
+                const msg = successful ? 'Kopyalandı!' : 'Kopyalama başarısız.';
+                showToast(msg);
+            } catch (err) {
+                console.error('Kopyalama hatası:', err);
+                showToast('Kopyalama başarısız oldu.');
+            }
+            document.body.removeChild(textarea);
+        }
+
+        /**
+         * Kullanıcıya kısa bir bildirim gösterir.
+         */
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.remove('opacity-0', 'scale-90', 'hidden');
+            toast.classList.add('opacity-100', 'scale-100');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'scale-100');
+                toast.classList.add('opacity-0', 'scale-90');
+                // Gizlemeden önce animasyonun bitmesini bekle
+                setTimeout(() => toast.classList.add('hidden'), 500);
+            }, 3000);
+        }
+
+        // Enter tuşu ile kural oluşturmayı etkinleştir
+        document.addEventListener('DOMContentLoaded', () => {
+            const ruleInput = document.getElementById('ruleInput');
+            ruleInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault(); // Yeni satır eklemeyi engelle
+                    generateRule();
+                }
+            });
+        });
+
+    </script>
+</head>
+<body class="bg-dark-900 text-gray-100 min-h-screen p-4 sm:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-accent mb-2">
+                <i class="fas fa-magic mr-2"></i> Kural Büyücüsü
+            </h1>
+            <p class="text-gray-400">SIEM Platformunuz için doğal dilde kural kodunu otomatik olarak üretin.</p>
+        </header>
+
+        <!-- Kural Oluşturma Formu -->
+        <div class="bg-dark-800 p-6 rounded-xl shadow-2xl border border-gray-700">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                
+                <!-- SIEM Seçimi -->
+                <div class="md:col-span-1">
+                    <label for="siemPlatform" class="block text-sm font-medium text-gray-300 mb-2">
+                        1. SIEM Platformunu Seçin:
+                    </label>
+                    <select id="siemPlatform" class="w-full p-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-lg focus:ring-accent focus:border-accent appearance-none transition duration-150 ease-in-out cursor-pointer">
+                        <option value="">-- Birini Seçin --</option>
+                        <option value="Splunk">Splunk</option>
+                        <option value="QRadar">QRadar</option>
+                        <option value="LogSign">LogSign</option>
+                        <option value="Wazuh">Wazuh</option>
+                    </select>
+                </div>
+
+                <!-- Kural Adı (Placeholder, LLM Prompt'a dahil edilecek) -->
+                <div class="md:col-span-2">
+                    <label for="ruleName" class="block text-sm font-medium text-gray-300 mb-2">
+                        2. Kural Adı (Önerilen)
+                    </label>
+                    <input type="text" id="ruleName" placeholder="Örn: 5 Başarısız Oturum Açma Girişimi" class="w-full p-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-lg focus:ring-accent focus:border-accent transition duration-150 ease-in-out" />
+                </div>
+            </div>
+
+            <!-- Kural Girdisi -->
+            <div class="mb-6">
+                <label for="ruleInput" class="block text-sm font-medium text-gray-300 mb-2">
+                    3. Kural Talebinizi Yazın:
+                </label>
+                <textarea id="ruleInput" rows="4" placeholder="Örn: 'hackerlerin en çok kullandığı 5 powershell komutunun 1 saat içinde 3 farklı kullanıcıda tetiklenmesi durumunda bir kural üret' veya 'sunucu A'dan sunucu B'ye yapılan büyük hacimli veri transferini tespit et'" class="w-full p-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-lg focus:ring-accent focus:border-accent resize-y transition duration-150 ease-in-out"></textarea>
+            </div>
+
+            <div id="errorArea" class="text-red-500 text-sm mb-4"></div>
+
+            <!-- İşlem Butonu -->
+            <button onclick="generateRule()" id="generateButton" class="w-full bg-accent hover:bg-opacity-90 text-dark-900 font-bold py-3 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-[1.01] flex items-center justify-center disabled:opacity-50" :disabled="isGenerating">
+                <span id="buttonText">Kuralı Otomatik Üret</span>
+                <svg id="loadingIndicator" class="animate-spin -ml-1 mr-3 h-5 w-5 text-dark-900 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Sonuç Alanı -->
+        <div class="mt-10">
+            <h2 class="text-2xl font-semibold text-gray-200 mb-4 flex items-center">
+                <i class="fas fa-code mr-2 text-accent"></i> Üretilen Kural Kodu
+                <button id="copyButton" onclick="copyRule()" class="ml-4 p-2 text-xs text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg hidden transition duration-150">
+                    Kopyala
+                </button>
+            </h2>
+            <div id="ruleOutput" class="min-h-[150px]">
+                <p class="text-gray-500 p-4 bg-dark-800 rounded-xl border border-gray-700">Yukarıdaki formu doldurun ve kuralınızı oluşturun...</p>
+            </div>
+            
+            <!-- Kaynak Atıfları -->
+            <div id="sourceAttributions" class="mt-4">
+                <!-- Buraya LLM'den gelen kaynaklar eklenecek -->
+            </div>
+        </div>
+
+        <!-- TELİF/YAPIMCI FOOTER -->
+        <footer class="mt-12 pt-6 border-t border-gray-700 text-center text-sm text-gray-500">
+            <p>
+                Bu araç, 
+                <a href="https://www.linkedin.com/in/onuroktaycom/" target="_blank" class="text-accent hover:text-white transition duration-200 font-medium">Onur Oktay</a>
+                tarafından üretilmiştir.
+            </p>
+        </footer>
+        
+    </div>
+
+    <!-- Toast Bildirimi -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-green-600 text-white px-4 py-2 rounded-lg shadow-xl transition-all duration-500 transform opacity-0 scale-90 hidden">
+        Kopyalandı!
+    </div>
+
+    <!-- FontAwesome Icons (Görsel çekicilik için) -->
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+</body>
+</html>si
