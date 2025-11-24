@@ -19,12 +19,19 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #121212; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
+        
+        /* Yeni: Devre dışı bırakıldığında butona uygulanacak sınıf */
+        .btn-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
     </style>
     <script>
-        // ÖNEMLİ: API Anahtarı artık buraya dahil EDİLMİYOR.
+        // ÖNEMLİ: API Anahtarı buraya dahil EDİLMİYOR.
         // API isteği, güvenli bir şekilde Vercel Serverless Function'a yönlendirilecektir.
         
-        const PROXY_URL = '/api/generate'; // Vercel'da oluşturacağınız Serverless Function yolu
+        const PROXY_URL = '/api/generate'; // Vercel'da oluşturulan Serverless Function yolu
 
         // Global UI durum değişkenleri
         let isGenerating = false;
@@ -65,6 +72,7 @@
             const sourceAttributions = document.getElementById('sourceAttributions');
             const copyButton = document.getElementById('copyButton');
             const errorArea = document.getElementById('errorArea');
+            const generateButton = document.getElementById('generateButton');
 
             // Temizle
             ruleOutput.innerHTML = '';
@@ -84,6 +92,8 @@
 
             isGenerating = true;
             loadingIndicator.classList.remove('hidden');
+            generateButton.disabled = true; // Butonu devre dışı bırak
+            generateButton.classList.add('btn-disabled'); // Yeni: Opaklık sınıfını ekle
 
             // Arka uca göndereceğimiz payload'u oluştur
             const payload = {
@@ -133,6 +143,8 @@
             } finally {
                 isGenerating = false;
                 loadingIndicator.classList.add('hidden');
+                generateButton.disabled = false; // Butonu tekrar etkinleştir
+                generateButton.classList.remove('btn-disabled'); // Yeni: Opaklık sınıfını kaldır
             }
         }
 
@@ -245,7 +257,7 @@
             <div id="errorArea" class="text-red-500 text-sm mb-4"></div>
 
             <!-- İşlem Butonu -->
-            <button onclick="generateRule()" id="generateButton" class="w-full bg-accent hover:bg-opacity-90 text-dark-900 font-bold py-3 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-[1.01] flex items-center justify-center disabled:opacity-50" :disabled="isGenerating">
+            <button onclick="generateRule()" id="generateButton" class="w-full bg-accent hover:bg-opacity-90 text-dark-900 font-bold py-3 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-[1.01] flex items-center justify-center">
                 <span id="buttonText">Kuralı Otomatik Üret</span>
                 <svg id="loadingIndicator" class="animate-spin -ml-1 mr-3 h-5 w-5 text-dark-900 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
