@@ -3,305 +3,198 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIEM Otomatik Kural Oluşturucu (Güvenli Proxy)</title>
+    <title>Kural Büyücüsü</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Modern, Inter font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
         body { font-family: 'Inter', sans-serif; }
-        /* Dark theme for a professional security tool look */
-        .bg-dark-900 { background-color: #121212; }
-        .bg-dark-800 { background-color: #1f1f1f; }
-        .text-accent { color: #00bcd4; /* Cyan/Teal accent */ }
+        .bg-dark-900 { background-color: #0f172a; }
+        .bg-dark-800 { background-color: #1e293b; }
+        .text-accent { color: #38bdf8; }
         
-        /* Custom scrollbar for dark theme */
-        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #121212; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }
-        
-        /* Devre dışı bırakıldığında butona uygulanacak sınıf (JS tarafından yönetilir) */
-        .btn-disabled {
-            opacity: 0.5;
+        /* Buton yüklenme durumu için kilitleme */
+        .btn-loading {
+            opacity: 0.7;
             cursor: not-allowed;
             pointer-events: none;
         }
+
+        /* Özel Kaydırma Çubuğu */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
-    <script>
-        // ÖNEMLİ: Artık doğrudan API'ye değil, Vercel Serverless Function'a çağrı yapılacak.
-        const PROXY_URL = '/api/generate'; // Vercel'da oluşturulan Serverless Function yolu
-
-        // Global UI durum değişkenleri
-        let isGenerating = false;
-
-        // Utility: Exponential Backoff ile Fetch
-        async function fetchWithBackoff(url, options, maxRetries = 5) {
-            for (let attempt = 0; attempt < maxRetries; attempt++) {
-                try {
-                    const response = await fetch(url, options);
-                    if (!response.ok) {
-                        // Vercel Fonksiyonundan gelen hata mesajlarını yakala
-                        const errorData = await response.json().catch(() => ({ message: 'Bilinmeyen Arka Uç Hatası' }));
-                        throw new Error(`Arka Uç Hatası (${response.status}): ${errorData.message || 'API isteği başarısız oldu.'}`);
-                    }
-                    return response;
-                } catch (error) {
-                    console.warn(`Attempt ${attempt + 1} failed: ${error.message}. Retrying...`);
-                    if (attempt < maxRetries - 1) {
-                        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                    } else {
-                        throw new Error(`API isteği başarısız oldu. Hata: ${error.message}`);
-                    }
-                }
-            }
-        }
-
-        /**
-         * Seçilen SIEM'e göre kural oluşturma işlemini başlatır.
-         */
-        async function generateRule() {
-            // Buton ve yüklenme elemanlarını al
-            const generateButton = document.getElementById('generateButton');
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            
-            if (isGenerating) return;
-
-            const siemSelect = document.getElementById('siemPlatform');
-            const ruleInput = document.getElementById('ruleInput');
-            const ruleOutput = document.getElementById('ruleOutput');
-            const sourceAttributions = document.getElementById('sourceAttributions');
-            const copyButton = document.getElementById('copyButton');
-            const errorArea = document.getElementById('errorArea');
-
-            // Temizle
-            ruleOutput.innerHTML = '';
-            sourceAttributions.innerHTML = '';
-            errorArea.textContent = '';
-            copyButton.classList.add('hidden');
-
-            const siemPlatform = siemSelect.value;
-            const userRequest = ruleInput.value.trim();
-            const ruleName = document.getElementById('ruleName').value.trim();
-
-
-            if (!siemPlatform || !userRequest) {
-                errorArea.textContent = 'Lütfen bir SIEM Platformu seçin ve kural talebinizi girin.';
-                return;
-            }
-
-            isGenerating = true;
-            loadingIndicator.classList.remove('hidden');
-            generateButton.disabled = true; // Butonu devre dışı bırak
-            generateButton.classList.add('btn-disabled'); // Opaklık sınıfını ekle
-
-            // Sadece gerekli kullanıcı girdilerini Serverless Function'a gönderiyoruz.
-            // Prompt oluşturma ve API anahtarı kullanımı artık arka uçta (api/generate.js) yapılacak.
-            const payload = {
-                siemPlatform: siemPlatform,
-                userRequest: userRequest,
-                ruleName: ruleName
-            };
-
-            try {
-                // Vercel Serverless Function'ı çağırıyoruz
-                const response = await fetchWithBackoff(PROXY_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                const result = await response.json();
-                
-                if (result.text) {
-                    const text = result.text;
-                    
-                    // Kural kodunu temiz ve formatlı göster
-                    const formattedCode = `<pre class="custom-scrollbar p-4 bg-dark-800 text-green-400 rounded-lg overflow-auto border border-gray-700">${escapeHtml(text)}</pre>`;
-                    ruleOutput.innerHTML = formattedCode;
-                    
-                    copyButton.classList.remove('hidden');
-
-                    // Kaynak Atıflarını Çıkar (Grounding)
-                    const sources = result.sources || [];
-
-                    if (sources.length > 0) {
-                        let sourceHtml = '<p class="text-xs text-gray-400 mt-4 mb-2">Bilgi Kaynakları (Sintaks/Tehdit):</p><ul class="list-disc list-inside text-sm text-gray-500">';
-                        sources.forEach((source, index) => {
-                            sourceHtml += `<li><a href="${source.uri}" target="_blank" class="hover:text-accent truncate" title="${source.title}">${source.title}</a></li>`;
-                        });
-                        sourceHtml += '</ul>';
-                        sourceAttributions.innerHTML = sourceHtml;
-                    }
-
-                } else {
-                    errorArea.textContent = 'Kural oluşturulamadı veya arka uçtan beklenmedik bir yanıt geldi.';
-                }
-
-            } catch (error) {
-                console.error("Fetch Error:", error);
-                errorArea.textContent = `${error.message}`;
-            } finally {
-                isGenerating = false;
-                loadingIndicator.classList.add('hidden');
-                generateButton.disabled = false; // Butonu tekrar etkinleştir
-                generateButton.classList.remove('btn-disabled'); // Opaklık sınıfını kaldır
-            }
-        }
-
-        /**
-         * HTML özel karakterlerinden kaçar.
-         */
-        function escapeHtml(unsafe) {
-            return unsafe
-                 .replace(/&/g, "&amp;")
-                 .replace(/</g, "&lt;")
-                 .replace(/>/g, "&gt;")
-                 .replace(/"/g, "&quot;")
-                 .replace(/'/g, "&#039;');
-        }
-
-        /**
-         * Kural kodunu panoya kopyalar.
-         */
-        function copyRule() {
-            const ruleText = document.querySelector('#ruleOutput pre').textContent;
-            const textarea = document.createElement('textarea');
-            textarea.value = ruleText;
-            document.body.appendChild(textarea);
-            textarea.select();
-            try {
-                const successful = document.execCommand('copy');
-                const msg = successful ? 'Kopyalandı!' : 'Kopyalama başarısız.';
-                showToast(msg);
-            } catch (err) {
-                console.error('Kopyalama hatası:', err);
-                showToast('Kopyalama başarısız oldu.');
-            }
-            document.body.removeChild(textarea);
-        }
-
-        /**
-         * Kullanıcıya kısa bir bildirim gösterir.
-         */
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.classList.remove('opacity-0', 'scale-90', 'hidden');
-            toast.classList.add('opacity-100', 'scale-100');
-
-            setTimeout(() => {
-                toast.classList.remove('opacity-100', 'scale-100');
-                toast.classList.add('opacity-0', 'scale-90');
-                setTimeout(() => toast.classList.add('hidden'), 500);
-            }, 3000);
-        }
-
-        // Enter tuşu ile kural oluşturmayı etkinleştir
-        document.addEventListener('DOMContentLoaded', () => {
-            const ruleInput = document.getElementById('ruleInput');
-            ruleInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    generateRule();
-                }
-            });
-        });
-
-    </script>
 </head>
-<body class="bg-dark-900 text-gray-100 min-h-screen p-4 sm:p-8">
-
-    <div class="max-w-4xl mx-auto">
+<body class="bg-dark-900 text-gray-100 min-h-screen p-6 flex flex-col">
+    <div class="max-w-4xl mx-auto flex-grow w-full">
         <header class="text-center mb-10">
-            <h1 class="text-4xl font-extrabold text-accent mb-2">
-                <i class="fas fa-magic mr-2"></i> Kural Büyücüsü
-            </h1>
+            <h1 class="text-4xl font-bold text-accent mb-2 italic tracking-tight">Kural Büyücüsü</h1>
             <p class="text-gray-400">SIEM Platformunuz için doğal dilde kural kodunu otomatik olarak üretin.</p>
         </header>
 
-        <!-- Kural Oluşturma Formu -->
-        <div class="bg-dark-800 p-6 rounded-xl shadow-2xl border border-gray-700">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                
-                <!-- SIEM Seçimi -->
-                <div class="md:col-span-1">
-                    <label for="siemPlatform" class="block text-sm font-medium text-gray-300 mb-2">
-                        1. SIEM Platformunu Seçin:
-                    </label>
-                    <select id="siemPlatform" class="w-full p-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-lg focus:ring-accent focus:border-accent appearance-none transition duration-150 ease-in-out cursor-pointer">
-                        <option value="">-- Birini Seçin --</option>
-                        <option value="Splunk">Splunk</option>
-                        <option value="QRadar">QRadar</option>
-                        <option value="LogSign">LogSign</option>
-                        <option value="Wazuh">Wazuh</option>
+        <!-- Kural Giriş Alanı -->
+        <div class="bg-dark-800 p-6 rounded-2xl shadow-2xl border border-gray-700">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm mb-2 text-gray-400 font-medium">SIEM Platformu</label>
+                    <select id="siemPlatform" class="w-full p-3 bg-gray-700 rounded-lg focus:ring-2 focus:ring-accent outline-none text-white border border-gray-600 transition-all">
+                        <option value="Splunk">Splunk (SPL)</option>
+                        <option value="QRadar">QRadar (AQL)</option>
+                        <option value="LogSign">LogSign (LQL)</option>
+                        <option value="Wazuh">Wazuh (XML)</option>
                     </select>
                 </div>
-
-                <!-- Kural Adı (Prompt'a dahil edilecek) -->
-                <div class="md:col-span-2">
-                    <label for="ruleName" class="block text-sm font-medium text-gray-300 mb-2">
-                        2. Kural Adı (Önerilen)
-                    </label>
-                    <input type="text" id="ruleName" placeholder="Örn: 5 Başarısız Oturum Açma Girişimi" class="w-full p-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-lg focus:ring-accent focus:border-accent transition duration-150 ease-in-out" />
+                <div>
+                    <label class="block text-sm mb-2 text-gray-400 font-medium">Kural Adı</label>
+                    <input type="text" id="ruleName" placeholder="Örn: Brute Force Tespiti" class="w-full p-3 bg-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-accent text-white border border-gray-600 transition-all">
                 </div>
             </div>
 
-            <!-- Kural Girdisi -->
-            <div class="mb-6">
-                <label for="ruleInput" class="block text-sm font-medium text-gray-300 mb-2">
-                    3. Kural Talebinizi Yazın:
-                </label>
-                <textarea id="ruleInput" rows="4" placeholder="Örn: 'hackerlerin en çok kullandığı 5 powershell komutunun 1 saat içinde 3 farklı kullanıcıda tetiklenmesi durumunda bir kural üret' veya 'sunucu A'dan sunucu B'ye yapılan büyük hacimli veri transferini tespit et'" class="w-full p-3 bg-gray-700 text-gray-200 border border-gray-600 rounded-lg focus:ring-accent focus:border-accent resize-y transition duration-150 ease-in-out"></textarea>
-            </div>
+            <label class="block text-sm mb-2 text-gray-400 font-medium">Talep Detayları</label>
+            <textarea id="ruleInput" rows="4" placeholder="Ne tür bir kural istiyorsunuz? (Örn: RDP üzerinden 5 başarısız deneme...)" class="w-full p-3 bg-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-accent mb-4 text-white border border-gray-600 transition-all"></textarea>
 
-            <div id="errorArea" class="text-red-500 text-sm mb-4"></div>
+            <!-- Hata Bilgilendirme -->
+            <div id="errorArea" class="text-red-400 text-sm mb-4 font-semibold"></div>
 
             <!-- İşlem Butonu -->
-            <button onclick="generateRule()" id="generateButton" class="w-full bg-accent hover:bg-opacity-90 text-dark-900 font-bold py-3 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-[1.01] flex items-center justify-center disabled:opacity-50" :disabled="isGenerating">
-                <span id="buttonText">Kuralı Otomatik Üret</span>
-                <svg id="loadingIndicator" class="animate-spin -ml-1 mr-3 h-5 w-5 text-dark-900 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+            <button onclick="generateRule()" id="generateButton" class="w-full bg-accent hover:bg-sky-400 text-slate-900 font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-3">
+                <span id="buttonText">Kuralı Oluştur</span>
+                <div id="loadingIndicator" class="hidden animate-spin h-5 w-5 border-2 border-slate-900 border-t-transparent rounded-full"></div>
             </button>
         </div>
 
-        <!-- Sonuç Alanı -->
-        <div class="mt-10">
-            <h2 class="text-2xl font-semibold text-gray-200 mb-4 flex items-center">
-                <i class="fas fa-code mr-2 text-accent"></i> Üretilen Kural Kodu
-                <button id="copyButton" onclick="copyRule()" class="ml-4 p-2 text-xs text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg hidden transition duration-150">
+        <!-- Sonuç Çıktısı -->
+        <div class="mt-10 mb-20">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    Üretilen Kod
+                </h2>
+                <button id="copyButton" onclick="copyRule()" class="hidden text-xs bg-slate-700 px-4 py-2 rounded-lg hover:bg-slate-600 transition text-white border border-slate-600 font-medium">
                     Kopyala
                 </button>
-            </h2>
-            <div id="ruleOutput" class="min-h-[150px]">
-                <p class="text-gray-500 p-4 bg-dark-800 rounded-xl border border-gray-700">Yukarıdaki formu doldurun ve kuralınızı oluşturun...</p>
             </div>
-            
-            <!-- Kaynak Atıfları -->
-            <div id="sourceAttributions" class="mt-4">
-                <!-- Buraya LLM'den gelen kaynaklar eklenecek -->
+            <div id="ruleOutput" class="min-h-[120px]">
+                <div class="text-gray-500 italic border border-dashed border-gray-700 p-8 rounded-xl text-center">
+                    Talebinizi yukarıya yazın ve kuralın oluşturulmasını bekleyin.
+                </div>
             </div>
         </div>
-
-        <!-- TELİF/YAPIMCI FOOTER -->
-        <footer class="mt-12 pt-6 border-t border-gray-700 text-center text-sm text-gray-500">
-            <p>
-                Bu araç, 
-                <a href="https://www.linkedin.com/in/onuroktaycom/" target="_blank" class="text-accent hover:text-white transition duration-200 font-medium">Onur Oktay</a>
-                tarafından üretilmiştir.
-            </p>
-        </footer>
-        
     </div>
 
-    <!-- Toast Bildirimi -->
-    <div id="toast" class="fixed bottom-5 right-5 bg-green-600 text-white px-4 py-2 rounded-lg shadow-xl transition-all duration-500 transform opacity-0 scale-90 hidden">
-        Kopyalandı!
+    <!-- Footer -->
+    <footer class="text-center py-6 text-gray-500 text-sm border-t border-gray-800 mt-10">
+        Bu araç, <span class="text-gray-300 font-semibold">Onur Oktay</span> tarafından üretilmiştir.
+    </footer>
+
+    <!-- Bildirim Balonu -->
+    <div id="toast" class="hidden fixed bottom-8 right-8 bg-green-500 text-white px-6 py-3 rounded-xl shadow-2xl transition-all font-semibold z-50">
+        Başarıyla Kopyalandı!
     </div>
 
-    <!-- FontAwesome Icons (Görsel çekicilik için) -->
-    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    <script>
+        /**
+         * Serverless API üzerinden kural oluşturma sürecini yönetir.
+         */
+        async function generateRule() {
+            const btn = document.getElementById('generateButton');
+            const btnText = document.getElementById('buttonText');
+            const loader = document.getElementById('loadingIndicator');
+            const errorArea = document.getElementById('errorArea');
+            const output = document.getElementById('ruleOutput');
+            
+            // Form verilerini al
+            const siem = document.getElementById('siemPlatform').value;
+            const request = document.getElementById('ruleInput').value.trim();
+            const name = document.getElementById('ruleName').value.trim();
+
+            if (!siem || !request) {
+                errorArea.textContent = 'Lütfen platform seçin ve kural detaylarını belirtin.';
+                return;
+            }
+
+            // Arayüzü kilitle ve yükleniyor durumuna geç
+            btn.classList.add('btn-loading');
+            btn.disabled = true;
+            loader.classList.remove('hidden');
+            btnText.textContent = 'Hazırlanıyor...';
+            errorArea.textContent = '';
+            output.innerHTML = `
+                <div class="p-8 border border-accent border-dashed rounded-xl text-accent animate-pulse text-center">
+                    <p class="font-bold uppercase tracking-wider">DeepSeek AI Kuralı Oluşturuyor...</p>
+                    <p class="text-sm opacity-70 mt-2">Bu işlem sunucu yoğunluğuna göre 10 saniye kadar sürebilir.</p>
+                </div>`;
+
+            try {
+                // Vercel Serverless Function (/api/generate.js) çağrısı
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        siemPlatform: siem, 
+                        userRequest: request, 
+                        ruleName: name 
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || `Sunucu hatası: ${response.status}`);
+                }
+
+                if (result.text) {
+                    // Kural kodunu ekrana bas
+                    output.innerHTML = `<pre class="p-5 bg-slate-900 text-emerald-400 rounded-xl overflow-auto border border-slate-700 whitespace-pre-wrap font-mono text-sm leading-relaxed shadow-inner">${escapeHtml(result.text)}</pre>`;
+                    document.getElementById('copyButton').classList.remove('hidden');
+                } else {
+                    throw new Error("API'den anlamlı bir yanıt alınamadı.");
+                }
+
+            } catch (err) {
+                console.error("Hata ayrıntıları:", err);
+                errorArea.textContent = 'Hata: ' + err.message;
+                output.innerHTML = '<p class="text-gray-500 italic text-center p-8 border border-red-900 rounded-xl bg-red-950/20">İşlem başarısız. Lütfen Vercel Logs panelini kontrol edin.</p>';
+            } finally {
+                // Arayüz kilidini kaldır
+                btn.classList.remove('btn-loading');
+                btn.disabled = false;
+                loader.classList.add('hidden');
+                btnText.textContent = 'Kuralı Oluştur';
+            }
+        }
+
+        /**
+         * Güvenlik için HTML karakterlerini temizler.
+         */
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        /**
+         * Üretilen metni panoya kopyalar.
+         */
+        function copyRule() {
+            const pre = document.querySelector('#ruleOutput pre');
+            if (!pre) return;
+            
+            const text = pre.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.getElementById('toast');
+                toast.classList.remove('hidden');
+                setTimeout(() => toast.classList.add('hidden'), 2500);
+            }).catch(err => {
+                console.error("Kopyalama hatası:", err);
+                alert("Kopyalama başarısız oldu.");
+            });
+        }
+    </script>
 </body>
 </html>
