@@ -3,198 +3,1592 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kural Büyücüsü</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Kural Büyücüsü v2 | ARGUN Security</title>
+    <meta name="description" content="AI-Powered SIEM Rule Generator with Prompt Injection Defense — by ARGUN Security">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-        
-        body { font-family: 'Inter', sans-serif; }
-        .bg-dark-900 { background-color: #0f172a; }
-        .bg-dark-800 { background-color: #1e293b; }
-        .text-accent { color: #38bdf8; }
-        
-        /* Buton yüklenme durumu için kilitleme */
-        .btn-loading {
-            opacity: 0.7;
-            cursor: not-allowed;
-            pointer-events: none;
+        /* ═══════════════════════════════════════════
+           CSS VARIABLES & RESET
+           ═══════════════════════════════════════════ */
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-tertiary: #1a2332;
+            --bg-card: #151d2e;
+            --bg-input: #0d1321;
+            --border-primary: #1e2d42;
+            --border-active: #00d4aa;
+            --border-danger: #ff4757;
+            --text-primary: #e8edf5;
+            --text-secondary: #8899aa;
+            --text-muted: #556677;
+            --accent-green: #00d4aa;
+            --accent-green-dim: #00d4aa22;
+            --accent-blue: #3b82f6;
+            --accent-blue-dim: #3b82f622;
+            --accent-red: #ff4757;
+            --accent-red-dim: #ff475722;
+            --accent-amber: #f59e0b;
+            --accent-amber-dim: #f59e0b22;
+            --accent-purple: #8b5cf6;
+            --accent-purple-dim: #8b5cf622;
+            --font-display: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --shadow-glow: 0 0 30px rgba(0, 212, 170, 0.08);
+            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+            --transition-fast: 0.15s ease;
+            --transition-med: 0.3s ease;
         }
 
-        /* Özel Kaydırma Çubuğu */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: var(--font-display);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ═══════════════════════════════════════════
+           BACKGROUND EFFECTS
+           ═══════════════════════════════════════════ */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background:
+                radial-gradient(ellipse at 20% 0%, rgba(0, 212, 170, 0.04) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(59, 130, 246, 0.03) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .grid-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image:
+                linear-gradient(rgba(0, 212, 170, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 212, 170, 0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ═══════════════════════════════════════════
+           LAYOUT
+           ═══════════════════════════════════════════ */
+        .app-container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ═══════════════════════════════════════════
+           HEADER
+           ═══════════════════════════════════════════ */
+        .app-header {
+            padding: 32px 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-primary);
+            margin-bottom: 32px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .brand-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .brand-icon::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.15));
+        }
+
+        .brand-text h1 {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .brand-text .version-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent-green);
+            background: var(--accent-green-dim);
+            padding: 2px 8px;
+            border-radius: 20px;
+            margin-left: 8px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            font-family: var(--font-mono);
+        }
+
+        .brand-text p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .header-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: var(--radius-md);
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            font-size: 12px;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+        }
+
+        .header-badge .shield-icon {
+            color: var(--accent-green);
+            font-size: 14px;
+        }
+
+        /* ═══════════════════════════════════════════
+           SECURITY STATUS BAR
+           ═══════════════════════════════════════════ */
+        .security-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+        }
+
+        .sec-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            font-size: 12px;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+            transition: var(--transition-fast);
+        }
+
+        .sec-indicator .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        .sec-indicator.active .dot { background: var(--accent-green); }
+        .sec-indicator.warning .dot { background: var(--accent-amber); animation: none; }
+        .sec-indicator.danger .dot { background: var(--accent-red); animation: pulse-danger 1s ease-in-out infinite; }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        @keyframes pulse-danger {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.4); }
+            50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(255, 71, 87, 0); }
+        }
+
+        /* ═══════════════════════════════════════════
+           MAIN GRID
+           ═══════════════════════════════════════════ */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+            .app-header { flex-direction: column; gap: 12px; align-items: flex-start; }
+            .security-bar { flex-direction: column; }
+        }
+
+        /* ═══════════════════════════════════════════
+           CARDS
+           ═══════════════════════════════════════════ */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-card);
+            transition: var(--transition-med);
+        }
+
+        .card:hover {
+            border-color: rgba(0, 212, 170, 0.15);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.3px;
+        }
+
+        .card-title .icon {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+        }
+
+        .card-title .icon.green { background: var(--accent-green-dim); }
+        .card-title .icon.blue { background: var(--accent-blue-dim); }
+        .card-title .icon.red { background: var(--accent-red-dim); }
+        .card-title .icon.purple { background: var(--accent-purple-dim); }
+
+        /* ═══════════════════════════════════════════
+           FORM ELEMENTS
+           ═══════════════════════════════════════════ */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-family: var(--font-mono);
+        }
+
+        .form-group select,
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 14px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: var(--font-display);
+            font-size: 14px;
+            transition: var(--transition-fast);
+            outline: none;
+        }
+
+        .form-group select:focus,
+        .form-group input:focus,
+        .form-group textarea:focus {
+            border-color: var(--accent-green);
+            box-shadow: 0 0 0 3px var(--accent-green-dim);
+        }
+
+        .form-group select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238899aa' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            padding-right: 36px;
+        }
+
+        .form-group textarea {
+            min-height: 140px;
+            resize: vertical;
+            line-height: 1.7;
+        }
+
+        .form-group select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .input-warning {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-family: var(--font-mono);
+            animation: slideDown 0.2s ease;
+        }
+
+        .input-warning.danger {
+            display: flex;
+            background: var(--accent-red-dim);
+            color: var(--accent-red);
+            border: 1px solid rgba(255, 71, 87, 0.2);
+        }
+
+        .input-warning.caution {
+            display: flex;
+            background: var(--accent-amber-dim);
+            color: var(--accent-amber);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ═══════════════════════════════════════════
+           BUTTONS
+           ═══════════════════════════════════════════ */
+        .btn-primary {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, var(--accent-green), #00b894);
+            color: var(--bg-primary);
+            font-family: var(--font-display);
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-med);
+            letter-spacing: -0.3px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 30px rgba(0, 212, 170, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-primary .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(10, 14, 23, 0.3);
+            border-top-color: var(--bg-primary);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-right: 8px;
+        }
+
+        .btn-primary.loading .spinner { display: inline-block; }
+        .btn-primary.loading .btn-text { opacity: 0.7; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .btn-secondary {
+            padding: 8px 16px;
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-sm);
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        /* ═══════════════════════════════════════════
+           CODE OUTPUT
+           ═══════════════════════════════════════════ */
+        .code-output {
+            background: var(--bg-input);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .code-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--border-primary);
+        }
+
+        .code-lang {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--accent-green);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .code-body {
+            padding: 16px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .code-body pre {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            line-height: 1.7;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .code-body .placeholder {
+            color: var(--text-muted);
+            font-style: italic;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Scrollbar */
+        .code-body::-webkit-scrollbar { width: 6px; }
+        .code-body::-webkit-scrollbar-track { background: transparent; }
+        .code-body::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 3px; }
+
+        /* ═══════════════════════════════════════════
+           SECURITY LOG
+           ═══════════════════════════════════════════ */
+        .security-log {
+            grid-column: 1 / -1;
+        }
+
+        .log-entries {
+            max-height: 280px;
+            overflow-y: auto;
+            background: var(--bg-input);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            padding: 4px;
+        }
+
+        .log-entry {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-family: var(--font-mono);
+            transition: var(--transition-fast);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .log-entry:hover { background: rgba(255, 255, 255, 0.02); }
+
+        .log-entry .log-time {
+            color: var(--text-muted);
+            white-space: nowrap;
+            min-width: 70px;
+        }
+
+        .log-entry .log-level {
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .log-entry .log-level.info { background: var(--accent-blue-dim); color: var(--accent-blue); }
+        .log-entry .log-level.warn { background: var(--accent-amber-dim); color: var(--accent-amber); }
+        .log-entry .log-level.block { background: var(--accent-red-dim); color: var(--accent-red); }
+        .log-entry .log-level.ok { background: var(--accent-green-dim); color: var(--accent-green); }
+
+        .log-entry .log-msg { color: var(--text-secondary); line-height: 1.5; }
+
+        .log-entries::-webkit-scrollbar { width: 5px; }
+        .log-entries::-webkit-scrollbar-track { background: transparent; }
+        .log-entries::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 3px; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-4px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .empty-log {
+            padding: 32px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        /* ═══════════════════════════════════════════
+           PI SHIELD PANEL
+           ═══════════════════════════════════════════ */
+        .shield-panel {
+            grid-column: 1 / -1;
+        }
+
+        .shield-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+        }
+
+        .shield-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            transition: var(--transition-fast);
+        }
+
+        .shield-item:hover {
+            border-color: rgba(0, 212, 170, 0.2);
+        }
+
+        .shield-item .s-icon {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .shield-item .s-icon.green { background: var(--accent-green-dim); }
+        .shield-item .s-icon.blue { background: var(--accent-blue-dim); }
+        .shield-item .s-icon.purple { background: var(--accent-purple-dim); }
+        .shield-item .s-icon.amber { background: var(--accent-amber-dim); }
+
+        .shield-item .s-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 3px;
+        }
+
+        .shield-item .s-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* ═══════════════════════════════════════════
+           STATS ROW
+           ═══════════════════════════════════════════ */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 700px) {
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-card .stat-value {
+            font-size: 28px;
+            font-weight: 800;
+            font-family: var(--font-mono);
+            letter-spacing: -1px;
+        }
+
+        .stat-card .stat-value.green { color: var(--accent-green); }
+        .stat-card .stat-value.blue { color: var(--accent-blue); }
+        .stat-card .stat-value.red { color: var(--accent-red); }
+        .stat-card .stat-value.amber { color: var(--accent-amber); }
+
+        .stat-card .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-top: 4px;
+            font-family: var(--font-mono);
+        }
+
+        /* ═══════════════════════════════════════════
+           FOOTER
+           ═══════════════════════════════════════════ */
+        .app-footer {
+            padding: 24px 0 32px;
+            border-top: 1px solid var(--border-primary);
+            margin-top: 16px;
+            text-align: center;
+        }
+
+        .app-footer p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .app-footer a {
+            color: var(--accent-green);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .app-footer .attribution {
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+        }
+
+        /* ═══════════════════════════════════════════
+           TOAST NOTIFICATION
+           ═══════════════════════════════════════════ */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 1000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            background: var(--accent-green);
+            color: var(--bg-primary);
+        }
+
+        .toast.error {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        /* ═══════════════════════════════════════════
+           TAB SYSTEM FOR SHIELD DETAILS
+           ═══════════════════════════════════════════ */
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            background: var(--bg-input);
+            border-radius: var(--radius-md);
+            padding: 4px;
+            border: 1px solid var(--border-primary);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: none;
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tab-btn:hover { color: var(--text-secondary); }
+
+        .tab-btn.active {
+            background: var(--bg-tertiary);
+            color: var(--accent-green);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
     </style>
 </head>
-<body class="bg-dark-900 text-gray-100 min-h-screen p-6 flex flex-col">
-    <div class="max-w-4xl mx-auto flex-grow w-full">
-        <header class="text-center mb-10">
-            <h1 class="text-4xl font-bold text-accent mb-2 italic tracking-tight">Kural Büyücüsü</h1>
-            <p class="text-gray-400">SIEM Platformunuz için doğal dilde kural kodunu otomatik olarak üretin.</p>
+<body>
+    <div class="grid-overlay"></div>
+
+    <div class="app-container">
+        <!-- ═══ HEADER ═══ -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-icon">🛡️</div>
+                <div class="brand-text">
+                    <h1>Kural Büyücüsü <span class="version-tag">v2.0</span></h1>
+                    <p>AI-Powered SIEM Rule Generator &mdash; Prompt Injection Hardened</p>
+                </div>
+            </div>
+            <div class="header-badge">
+                <span class="shield-icon">🔒</span>
+                <span>PI Defense Active</span>
+            </div>
         </header>
 
-        <!-- Kural Giriş Alanı -->
-        <div class="bg-dark-800 p-6 rounded-2xl shadow-2xl border border-gray-700">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                    <label class="block text-sm mb-2 text-gray-400 font-medium">SIEM Platformu</label>
-                    <select id="siemPlatform" class="w-full p-3 bg-gray-700 rounded-lg focus:ring-2 focus:ring-accent outline-none text-white border border-gray-600 transition-all">
-                        <option value="Splunk">Splunk (SPL)</option>
-                        <option value="QRadar">QRadar (AQL)</option>
-                        <option value="LogSign">LogSign (LQL)</option>
-                        <option value="Wazuh">Wazuh (XML)</option>
+        <!-- ═══ STATS ROW ═══ -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value green" id="statGenerated">0</div>
+                <div class="stat-label">Üretilen Kural</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value blue" id="statScanned">0</div>
+                <div class="stat-label">Taranan Girdi</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value red" id="statBlocked">0</div>
+                <div class="stat-label">Engellenen PI</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value amber" id="statWarnings">0</div>
+                <div class="stat-label">Uyarı</div>
+            </div>
+        </div>
+
+        <!-- ═══ SECURITY STATUS BAR ═══ -->
+        <div class="security-bar">
+            <div class="sec-indicator active" id="indInputGuard">
+                <span class="dot"></span>
+                <span>Input Sanitizer</span>
+            </div>
+            <div class="sec-indicator active" id="indPIDetect">
+                <span class="dot"></span>
+                <span>PI Detection Engine</span>
+            </div>
+            <div class="sec-indicator active" id="indPromptHarden">
+                <span class="dot"></span>
+                <span>Prompt Hardening</span>
+            </div>
+            <div class="sec-indicator active" id="indOutputFilter">
+                <span class="dot"></span>
+                <span>Output Validator</span>
+            </div>
+            <div class="sec-indicator active" id="indAuditLog">
+                <span class="dot"></span>
+                <span>Audit Logger</span>
+            </div>
+        </div>
+
+        <!-- ═══ MAIN GRID ═══ -->
+        <div class="main-grid">
+            <!-- LEFT: Rule Generator -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="icon green">⚡</span>
+                        Kural Üretici
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>SIEM Platformu</label>
+                    <select id="siem-platform">
+                        <option value="splunk">Splunk (SPL)</option>
+                        <option value="qradar">QRadar (AQL)</option>
+                        <option value="logsign">LogSign (LQL)</option>
+                        <option value="wazuh">Wazuh (XML)</option>
+                        <option value="elastic">Elastic Security (KQL)</option>
+                        <option value="sentinel">Microsoft Sentinel (KQL)</option>
+                        <option value="sigma">Sigma (YAML)</option>
                     </select>
                 </div>
-                <div>
-                    <label class="block text-sm mb-2 text-gray-400 font-medium">Kural Adı</label>
-                    <input type="text" id="ruleName" placeholder="Örn: Brute Force Tespiti" class="w-full p-3 bg-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-accent text-white border border-gray-600 transition-all">
+
+                <div class="form-group">
+                    <label>Kural Adı</label>
+                    <input type="text" id="rule-name" placeholder="Örn: Brute Force SSH Tespiti" maxlength="120">
+                    <div class="input-warning" id="nameWarning"></div>
                 </div>
-            </div>
 
-            <label class="block text-sm mb-2 text-gray-400 font-medium">Talep Detayları</label>
-            <textarea id="ruleInput" rows="4" placeholder="Ne tür bir kural istiyorsunuz? (Örn: RDP üzerinden 5 başarısız deneme...)" class="w-full p-3 bg-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-accent mb-4 text-white border border-gray-600 transition-all"></textarea>
+                <div class="form-group">
+                    <label>Talep Detayları</label>
+                    <textarea id="rule-detail" placeholder="Kuralınızı doğal dilde tanımlayın. Örn: Son 5 dakikada aynı kaynak IP'den 10'dan fazla başarısız SSH giriş denemesi yapıldığında alarm üretsin..." maxlength="2000"></textarea>
+                    <div class="input-warning" id="detailWarning"></div>
+                </div>
 
-            <!-- Hata Bilgilendirme -->
-            <div id="errorArea" class="text-red-400 text-sm mb-4 font-semibold"></div>
-
-            <!-- İşlem Butonu -->
-            <button onclick="generateRule()" id="generateButton" class="w-full bg-accent hover:bg-sky-400 text-slate-900 font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-3">
-                <span id="buttonText">Kuralı Oluştur</span>
-                <div id="loadingIndicator" class="hidden animate-spin h-5 w-5 border-2 border-slate-900 border-t-transparent rounded-full"></div>
-            </button>
-        </div>
-
-        <!-- Sonuç Çıktısı -->
-        <div class="mt-10 mb-20">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                    </svg>
-                    Üretilen Kod
-                </h2>
-                <button id="copyButton" onclick="copyRule()" class="hidden text-xs bg-slate-700 px-4 py-2 rounded-lg hover:bg-slate-600 transition text-white border border-slate-600 font-medium">
-                    Kopyala
+                <button class="btn-primary" id="generateBtn" onclick="handleGenerate()">
+                    <span class="spinner"></span>
+                    <span class="btn-text">🛡️ Güvenli Kural Üret</span>
                 </button>
             </div>
-            <div id="ruleOutput" class="min-h-[120px]">
-                <div class="text-gray-500 italic border border-dashed border-gray-700 p-8 rounded-xl text-center">
-                    Talebinizi yukarıya yazın ve kuralın oluşturulmasını bekleyin.
+
+            <!-- RIGHT: Output -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="icon blue">📋</span>
+                        Üretilen Kod
+                    </div>
+                    <button class="btn-secondary" onclick="copyOutput()">📋 Kopyala</button>
+                </div>
+
+                <div class="code-output">
+                    <div class="code-toolbar">
+                        <span class="code-lang" id="codeLang">SPL</span>
+                        <span style="font-size:11px; color:var(--text-muted); font-family:var(--font-mono);" id="codeTimestamp"></span>
+                    </div>
+                    <div class="code-body">
+                        <pre id="codeOutput"><span class="placeholder">⌛ Talebinizi yazın ve kuralın oluşturulmasını bekleyin...</span></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECURITY LOG -->
+            <div class="card security-log">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="icon red">📊</span>
+                        Güvenlik Denetim Logu
+                    </div>
+                    <button class="btn-secondary" onclick="clearLog()">Temizle</button>
+                </div>
+                <div class="log-entries" id="logEntries">
+                    <div class="empty-log">Henüz bir işlem gerçekleştirilmedi. Güvenlik olayları burada görünecek.</div>
+                </div>
+            </div>
+
+            <!-- PI SHIELD PANEL -->
+            <div class="card shield-panel">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span class="icon purple">🔬</span>
+                        PI Savunma Katmanları
+                    </div>
+                    <span style="font-size:11px; color:var(--text-muted); font-family:var(--font-mono);">Arcanum PI Taxonomy v1.5 Tabanlı</span>
+                </div>
+
+                <div class="tab-bar">
+                    <button class="tab-btn active" onclick="switchTab('intents')">Attack Intents</button>
+                    <button class="tab-btn" onclick="switchTab('techniques')">Techniques</button>
+                    <button class="tab-btn" onclick="switchTab('evasions')">Evasions</button>
+                    <button class="tab-btn" onclick="switchTab('defenses')">Defenses</button>
+                </div>
+
+                <div class="tab-content active" id="tab-intents">
+                    <div class="shield-grid">
+                        <div class="shield-item">
+                            <span class="s-icon red">🎯</span>
+                            <div>
+                                <div class="s-title">System Prompt Extraction</div>
+                                <div class="s-desc">Sistem prompt'unu sızdırma girişimleri tespit edilir ve engellenir.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon amber">🔓</span>
+                            <div>
+                                <div class="s-title">Jailbreak Attempts</div>
+                                <div class="s-desc">Güvenlik kısıtlamalarını aşma denemeleri yakalanır.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon blue">📤</span>
+                            <div>
+                                <div class="s-title">Data Exfiltration</div>
+                                <div class="s-desc">Veri sızdırma amaçlı manipülasyon girişimleri izlenir.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon purple">🎭</span>
+                            <div>
+                                <div class="s-title">Output Manipulation</div>
+                                <div class="s-desc">LLM çıktısını manipüle etme girişimleri filtrelenir.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab-techniques">
+                    <div class="shield-grid">
+                        <div class="shield-item">
+                            <span class="s-icon red">💉</span>
+                            <div>
+                                <div class="s-title">Direct Injection</div>
+                                <div class="s-desc">Doğrudan kullanıcı girdisine enjekte edilen komutlar yakalanır.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon amber">🔗</span>
+                            <div>
+                                <div class="s-title">Indirect Injection</div>
+                                <div class="s-desc">Harici veri kaynakları üzerinden yapılan enjeksiyonlar izlenir.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon blue">🧠</span>
+                            <div>
+                                <div class="s-title">Context Manipulation</div>
+                                <div class="s-desc">Context window doldurmaya yönelik saldırılar engellenir.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon purple">🤖</span>
+                            <div>
+                                <div class="s-title">Role Assumption</div>
+                                <div class="s-desc">"Artık sen X'sin" tarzı rol atama girişimleri tespit edilir.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab-evasions">
+                    <div class="shield-grid">
+                        <div class="shield-item">
+                            <span class="s-icon green">🔤</span>
+                            <div>
+                                <div class="s-title">Encoding Evasions</div>
+                                <div class="s-desc">Base64, ROT13, hex encoding ile gizlenmiş komutlar çözümlenir.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon amber">🌐</span>
+                            <div>
+                                <div class="s-title">Language Switching</div>
+                                <div class="s-desc">Farklı dil kullanarak filtreleri aşma girişimleri yakalanır.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon blue">🎭</span>
+                            <div>
+                                <div class="s-title">Fictional Framing</div>
+                                <div class="s-desc">Kurgusal senaryo ile saldırı gizleme denemeleri analiz edilir.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon purple">🧩</span>
+                            <div>
+                                <div class="s-title">Token Smuggling</div>
+                                <div class="s-desc">Özel karakter ve Unicode ile token kaçırma engellenir.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab-defenses">
+                    <div class="shield-grid">
+                        <div class="shield-item">
+                            <span class="s-icon green">🧹</span>
+                            <div>
+                                <div class="s-title">Input Sanitization</div>
+                                <div class="s-desc">Tüm girdiler regex + pattern matching ile temizlenir.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon blue">🏗️</span>
+                            <div>
+                                <div class="s-title">Hardened System Prompt</div>
+                                <div class="s-desc">Sistem prompt'u saldırılara dayanıklı olarak yapılandırılmıştır.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon amber">📏</span>
+                            <div>
+                                <div class="s-title">Output Validation</div>
+                                <div class="s-desc">AI çıktısı format ve içerik doğrulamasından geçirilir.</div>
+                            </div>
+                        </div>
+                        <div class="shield-item">
+                            <span class="s-icon purple">📝</span>
+                            <div>
+                                <div class="s-title">Audit Logging</div>
+                                <div class="s-desc">Tüm girdi/çıktı işlemleri denetim amaçlı loglanır.</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- ═══ FOOTER ═══ -->
+        <footer class="app-footer">
+            <p>
+                <a href="https://github.com/onuroktay14" target="_blank">Onur Oktay</a> tarafından
+                <a href="https://argunsec.com" target="_blank">ARGUN Security</a> için geliştirilmiştir.
+            </p>
+            <p class="attribution">
+                PI Savunma Katmanları:
+                <a href="https://github.com/Arcanum-Sec/arc_pi_taxonomy" target="_blank">Arcanum PI Taxonomy</a>
+                by Jason Haddix (Arcanum Information Security) tabanlıdır — CC BY 4.0
+            </p>
+        </footer>
     </div>
 
-    <!-- Footer -->
-    <footer class="text-center py-6 text-gray-500 text-sm border-t border-gray-800 mt-10">
-        Bu araç, <span class="text-gray-300 font-semibold">Onur Oktay</span> tarafından üretilmiştir.
-    </footer>
-
-    <!-- Bildirim Balonu -->
-    <div id="toast" class="hidden fixed bottom-8 right-8 bg-green-500 text-white px-6 py-3 rounded-xl shadow-2xl transition-all font-semibold z-50">
-        Başarıyla Kopyalandı!
-    </div>
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
 
     <script>
-        /**
-         * Serverless API üzerinden kural oluşturma sürecini yönetir.
-         */
-        async function generateRule() {
-            const btn = document.getElementById('generateButton');
-            const btnText = document.getElementById('buttonText');
-            const loader = document.getElementById('loadingIndicator');
-            const errorArea = document.getElementById('errorArea');
-            const output = document.getElementById('ruleOutput');
-            
-            // Form verilerini al
-            const siem = document.getElementById('siemPlatform').value;
-            const request = document.getElementById('ruleInput').value.trim();
-            const name = document.getElementById('ruleName').value.trim();
+    /* ═══════════════════════════════════════════════════════════════
+       KURAL BÜYÜCÜSÜ v2 — CLIENT-SIDE ENGINE
+       Prompt Injection Defense Layer (Arcanum PI Taxonomy Based)
+       ═══════════════════════════════════════════════════════════════ */
 
-            if (!siem || !request) {
-                errorArea.textContent = 'Lütfen platform seçin ve kural detaylarını belirtin.';
-                return;
-            }
+    // ─── STATE ───────────────────────────────────────────────
+    const state = {
+        generated: 0,
+        scanned: 0,
+        blocked: 0,
+        warnings: 0,
+        logEntries: []
+    };
 
-            // Arayüzü kilitle ve yükleniyor durumuna geç
-            btn.classList.add('btn-loading');
-            btn.disabled = true;
-            loader.classList.remove('hidden');
-            btnText.textContent = 'Hazırlanıyor...';
-            errorArea.textContent = '';
-            output.innerHTML = `
-                <div class="p-8 border border-accent border-dashed rounded-xl text-accent animate-pulse text-center">
-                    <p class="font-bold uppercase tracking-wider">Büyücü Kuralı Oluşturuyor...</p>
-                    <p class="text-sm opacity-70 mt-2">Bu işlem sunucu yoğunluğuna göre 10 saniye kadar sürebilir.</p>
-                </div>`;
+    // ─── PLATFORM LANGUAGE MAP ───────────────────────────────
+    const PLATFORM_LANG = {
+        splunk: 'SPL', qradar: 'AQL', logsign: 'LQL',
+        wazuh: 'XML', elastic: 'KQL', sentinel: 'KQL', sigma: 'YAML'
+    };
 
-            try {
-                // Vercel Serverless Function (/api/generate.js) çağrısı
-                const response = await fetch('/api/generate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        siemPlatform: siem, 
-                        userRequest: request, 
-                        ruleName: name 
-                    })
-                });
+    // ─── PI DETECTION ENGINE ─────────────────────────────────
+    // Based on Arcanum PI Taxonomy v1.5 - Attack Intents, Techniques, Evasions
+    const PI_PATTERNS = {
 
-                const result = await response.json();
+        // ATTACK INTENTS: System Prompt Extraction
+        systemPromptExtraction: [
+            /ignore\s*(all\s*)?(previous|prior|above|earlier)\s*(instructions?|prompts?|rules?|directives?)/i,
+            /reveal\s*(your|the|system)\s*(prompt|instructions?|rules?|directives?)/i,
+            /what\s*(are|is)\s*(your|the)\s*(system\s*)?(prompt|instructions?|rules?)/i,
+            /show\s*(me\s*)?(your|the)\s*(system\s*)?(prompt|instructions?|rules?|config)/i,
+            /repeat\s*(your|the)\s*(system\s*)?(prompt|instructions?|initial)/i,
+            /print\s*(your|the)\s*(system\s*)?(prompt|instructions?)/i,
+            /display\s*(your|the)\s*(system|hidden|secret)\s*(prompt|instructions?|text)/i,
+            /output\s*(your|the)\s*(system|original)\s*(prompt|message|instructions?)/i,
+        ],
 
-                if (!response.ok) {
-                    throw new Error(result.message || `Sunucu hatası: ${response.status}`);
+        // ATTACK INTENTS: Jailbreak / Safety Bypass
+        jailbreakAttempts: [
+            /you\s*are\s*(now|no\s*longer)\s*(a|an|the)\s*/i,
+            /(DAN|STAN|DUDE|KEVIN)\s*(mode|prompt|jailbreak)/i,
+            /pretend\s*(you\s*are|to\s*be|you're)\s*(a|an)?\s*(unrestricted|unfiltered|evil|hacker)/i,
+            /act\s*as\s*(if\s*you\s*(have|had)|a|an)\s*(no|without)\s*(restrictions?|filters?|limitations?)/i,
+            /enter\s*(developer|maintenance|debug|admin|god)\s*mode/i,
+            /disable\s*(your|all|the)\s*(safety|security|content)\s*(filters?|restrictions?|guards?)/i,
+            /bypass\s*(your|all|the)\s*(safety|security|content)\s*(filters?|restrictions?|guards?)/i,
+            /override\s*(your|all|the)\s*(safety|security|content)\s*(filters?|restrictions?|rules?)/i,
+        ],
+
+        // ATTACK TECHNIQUES: Direct Injection
+        directInjection: [
+            /\[SYSTEM\]/i,
+            /\[INST\]/i,
+            /<<\s*SYS\s*>>/i,
+            /<\|im_start\|>/i,
+            /\{\{system\}\}/i,
+            /###\s*(instruction|system|human|assistant)/i,
+            /```\s*(system|prompt|instruction)/i,
+        ],
+
+        // ATTACK TECHNIQUES: Role Assumption / Social Engineering
+        roleManipulation: [
+            /from\s*now\s*on\s*(you\s*(are|will|must|should))/i,
+            /new\s*(role|persona|character|identity)\s*:\s*/i,
+            /switch\s*(to|into)\s*(a\s*)?(different|new)\s*(mode|role|persona)/i,
+            /forget\s*(everything|all|your)\s*(you\s*(know|learned)|previous|training)/i,
+            /your\s*(new|real|true|actual)\s*(purpose|goal|mission|task)/i,
+        ],
+
+        // ATTACK TECHNIQUES: Context Manipulation
+        contextManipulation: [
+            /end\s*of\s*(system\s*)?(prompt|instructions?|message)/i,
+            /begin\s*(user|human)\s*(input|message|turn)/i,
+            /---\s*(new|begin|start)\s*(instructions?|context|session)/i,
+            /the\s*above\s*(is|was)\s*(just\s*)?(a\s*)?(test|example|placeholder)/i,
+            /actual\s*(instructions?|task|prompt)\s*(is|are|follows?)/i,
+        ],
+
+        // ATTACK EVASIONS: Encoded Payloads
+        encodedPayloads: [
+            /base64\s*decode/i,
+            /eval\s*\(/i,
+            /exec\s*\(/i,
+            /atob\s*\(/i,
+            /fromCharCode/i,
+            /\\x[0-9a-f]{2}/i,
+            /\\u[0-9a-f]{4}/i,
+            /&#x?[0-9a-f]+;/i,
+        ],
+
+        // ATTACK INTENTS: Data Exfiltration / Harmful Commands
+        dataExfiltration: [
+            /curl\s+http/i,
+            /wget\s+http/i,
+            /fetch\s*\(\s*['"]http/i,
+            /send\s*(to|data|results?)\s*(to\s*)?(http|url|endpoint|webhook)/i,
+            /exfiltrate/i,
+            /upload\s*(to|data|results?)\s*(to\s*)?/i,
+        ],
+
+        // DESTRUCTIVE INTENTS
+        destructiveCommands: [
+            /delete\s*(all|every)\s*(rules?|data|records?|files?|entries?)/i,
+            /drop\s*(table|database|collection)/i,
+            /truncate\s*(table|database)/i,
+            /rm\s+-rf/i,
+            /format\s*(disk|drive|system)/i,
+            /shutdown\s*(system|server|service)/i,
+        ],
+    };
+
+    // ─── PI SCAN ENGINE ──────────────────────────────────────
+    function scanForPI(text) {
+        const results = {
+            isClean: true,
+            isSuspicious: false,
+            isBlocked: false,
+            findings: [],
+            riskScore: 0
+        };
+
+        if (!text || text.trim().length === 0) return results;
+
+        const normalizedText = text.normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+        for (const [category, patterns] of Object.entries(PI_PATTERNS)) {
+            for (const pattern of patterns) {
+                if (pattern.test(normalizedText)) {
+                    results.findings.push({
+                        category: category,
+                        pattern: pattern.source.substring(0, 50),
+                        severity: getSeverity(category)
+                    });
                 }
-
-                if (result.text) {
-                    // Kural kodunu ekrana bas
-                    output.innerHTML = `<pre class="p-5 bg-slate-900 text-emerald-400 rounded-xl overflow-auto border border-slate-700 whitespace-pre-wrap font-mono text-sm leading-relaxed shadow-inner">${escapeHtml(result.text)}</pre>`;
-                    document.getElementById('copyButton').classList.remove('hidden');
-                } else {
-                    throw new Error("API'den anlamlı bir yanıt alınamadı.");
-                }
-
-            } catch (err) {
-                console.error("Hata ayrıntıları:", err);
-                errorArea.textContent = 'Hata: ' + err.message;
-                output.innerHTML = '<p class="text-gray-500 italic text-center p-8 border border-red-900 rounded-xl bg-red-950/20">İşlem başarısız. Lütfen Vercel Logs panelini kontrol edin.</p>';
-            } finally {
-                // Arayüz kilidini kaldır
-                btn.classList.remove('btn-loading');
-                btn.disabled = false;
-                loader.classList.add('hidden');
-                btnText.textContent = 'Kuralı Oluştur';
             }
         }
 
-        /**
-         * Güvenlik için HTML karakterlerini temizler.
-         */
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        /**
-         * Üretilen metni panoya kopyalar.
-         */
-        function copyRule() {
-            const pre = document.querySelector('#ruleOutput pre');
-            if (!pre) return;
-            
-            const text = pre.textContent;
-            navigator.clipboard.writeText(text).then(() => {
-                const toast = document.getElementById('toast');
-                toast.classList.remove('hidden');
-                setTimeout(() => toast.classList.add('hidden'), 2500);
-            }).catch(err => {
-                console.error("Kopyalama hatası:", err);
-                alert("Kopyalama başarısız oldu.");
+        // Length-based heuristic (context window stuffing)
+        if (normalizedText.length > 1500) {
+            results.findings.push({
+                category: 'contextStuffing',
+                pattern: `Aşırı uzun girdi: ${normalizedText.length} karakter`,
+                severity: 'medium'
             });
         }
+
+        // High ratio of special characters
+        const specialRatio = (normalizedText.replace(/[a-zA-Z0-9\sğüşıöçĞÜŞİÖÇ.,;:!?'"()\-\[\]{}]/g, '').length) / normalizedText.length;
+        if (specialRatio > 0.3) {
+            results.findings.push({
+                category: 'tokenSmuggling',
+                pattern: `Yüksek özel karakter oranı: ${(specialRatio * 100).toFixed(0)}%`,
+                severity: 'medium'
+            });
+        }
+
+        // Calculate risk
+        results.riskScore = results.findings.reduce((score, f) => {
+            const weights = { critical: 40, high: 25, medium: 10, low: 5 };
+            return score + (weights[f.severity] || 5);
+        }, 0);
+
+        if (results.riskScore >= 25) {
+            results.isBlocked = true;
+            results.isClean = false;
+        } else if (results.riskScore > 0) {
+            results.isSuspicious = true;
+            results.isClean = false;
+        }
+
+        return results;
+    }
+
+    function getSeverity(category) {
+        const severityMap = {
+            systemPromptExtraction: 'critical',
+            jailbreakAttempts: 'critical',
+            directInjection: 'critical',
+            roleManipulation: 'high',
+            contextManipulation: 'high',
+            encodedPayloads: 'high',
+            dataExfiltration: 'critical',
+            destructiveCommands: 'critical',
+            contextStuffing: 'medium',
+            tokenSmuggling: 'medium',
+        };
+        return severityMap[category] || 'low';
+    }
+
+    function getCategoryLabel(category) {
+        const labels = {
+            systemPromptExtraction: 'System Prompt Extraction',
+            jailbreakAttempts: 'Jailbreak Attempt',
+            directInjection: 'Direct Injection',
+            roleManipulation: 'Role Manipulation',
+            contextManipulation: 'Context Manipulation',
+            encodedPayloads: 'Encoded Payload',
+            dataExfiltration: 'Data Exfiltration',
+            destructiveCommands: 'Destructive Command',
+            contextStuffing: 'Context Stuffing',
+            tokenSmuggling: 'Token Smuggling',
+        };
+        return labels[category] || category;
+    }
+
+    // ─── INPUT SANITIZER ─────────────────────────────────────
+    function sanitizeInput(text) {
+        if (!text) return '';
+
+        let sanitized = text;
+
+        // Unicode normalization
+        sanitized = sanitized.normalize('NFKC');
+
+        // Remove zero-width characters
+        sanitized = sanitized.replace(/[\u200B-\u200D\uFEFF\u00AD\u2060\u180E]/g, '');
+
+        // Remove control characters (except newlines, tabs)
+        sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+        // Normalize excessive whitespace
+        sanitized = sanitized.replace(/[ \t]{4,}/g, '  ');
+        sanitized = sanitized.replace(/\n{4,}/g, '\n\n');
+
+        // Limit length
+        sanitized = sanitized.substring(0, 2000);
+
+        return sanitized.trim();
+    }
+
+    // ─── OUTPUT VALIDATOR ────────────────────────────────────
+    function validateOutput(output, platform) {
+        if (!output) return { valid: false, reason: 'Boş çıktı' };
+
+        // Check if output contains system prompt leakage indicators
+        const leakagePatterns = [
+            /you\s*are\s*a\s*SIEM\s*rule/i,
+            /system\s*prompt/i,
+            /my\s*instructions?\s*(are|is)/i,
+            /I\s*was\s*instructed\s*to/i,
+            /here\s*(is|are)\s*my\s*(instructions?|rules?|prompt)/i,
+        ];
+
+        for (const pattern of leakagePatterns) {
+            if (pattern.test(output)) {
+                return { valid: false, reason: 'Olası sistem prompt sızıntısı tespit edildi' };
+            }
+        }
+
+        // Basic format validation per platform
+        const validators = {
+            splunk: (o) => /\b(index|source|sourcetype|search|where|stats|eval|table)\b/i.test(o),
+            qradar: (o) => /\b(SELECT|FROM|WHERE|AND|OR|LIKE|START|STOP)\b/i.test(o),
+            wazuh: (o) => /<\/?(?:rule|group|decoded_as|description|match|regex|field)\b/i.test(o),
+            logsign: (o) => o.length > 10,
+            elastic: (o) => /\b(event\.|process\.|host\.|rule\.|sequence|where)\b/i.test(o),
+            sentinel: (o) => /\b(SecurityEvent|Syslog|CommonSecurityLog|where|project|extend)\b/i.test(o),
+            sigma: (o) => /\b(title|status|logsource|detection|condition)\b/i.test(o),
+        };
+
+        const validator = validators[platform];
+        if (validator && !validator(output)) {
+            return { valid: false, reason: `Çıktı ${PLATFORM_LANG[platform]} formatına uymuyor olabilir` };
+        }
+
+        return { valid: true };
+    }
+
+    // ─── LOGGING ─────────────────────────────────────────────
+    function addLog(level, message) {
+        const now = new Date();
+        const time = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        state.logEntries.unshift({ time, level, message });
+        if (state.logEntries.length > 100) state.logEntries.pop();
+
+        renderLog();
+    }
+
+    function renderLog() {
+        const container = document.getElementById('logEntries');
+        if (state.logEntries.length === 0) {
+            container.innerHTML = '<div class="empty-log">Henüz bir işlem gerçekleştirilmedi.</div>';
+            return;
+        }
+
+        container.innerHTML = state.logEntries.map(entry => `
+            <div class="log-entry">
+                <span class="log-time">${entry.time}</span>
+                <span class="log-level ${entry.level}">${entry.level.toUpperCase()}</span>
+                <span class="log-msg">${entry.message}</span>
+            </div>
+        `).join('');
+    }
+
+    function clearLog() {
+        state.logEntries = [];
+        renderLog();
+    }
+
+    // ─── STATS ───────────────────────────────────────────────
+    function updateStats() {
+        document.getElementById('statGenerated').textContent = state.generated;
+        document.getElementById('statScanned').textContent = state.scanned;
+        document.getElementById('statBlocked').textContent = state.blocked;
+        document.getElementById('statWarnings').textContent = state.warnings;
+    }
+
+    // ─── TOAST ───────────────────────────────────────────────
+    function showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = `toast ${type} show`;
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // ─── TABS ────────────────────────────────────────────────
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    // ─── COPY ────────────────────────────────────────────────
+    function copyOutput() {
+        const output = document.getElementById('codeOutput').textContent;
+        if (!output || output.includes('Talebinizi yazın')) {
+            showToast('Kopyalanacak bir çıktı yok', 'error');
+            return;
+        }
+        navigator.clipboard.writeText(output).then(() => {
+            showToast('Kod panoya kopyalandı!');
+            addLog('info', 'Üretilen kural kodu panoya kopyalandı');
+        });
+    }
+
+    // ─── REAL-TIME INPUT MONITORING ──────────────────────────
+    const ruleNameInput = document.getElementById('rule-name');
+    const ruleDetailInput = document.getElementById('rule-detail');
+
+    ruleNameInput.addEventListener('input', debounce(() => {
+        const result = scanForPI(ruleNameInput.value);
+        showInputWarning('nameWarning', result);
+    }, 300));
+
+    ruleDetailInput.addEventListener('input', debounce(() => {
+        const result = scanForPI(ruleDetailInput.value);
+        showInputWarning('detailWarning', result);
+    }, 300));
+
+    function showInputWarning(elementId, scanResult) {
+        const el = document.getElementById(elementId);
+        if (scanResult.isBlocked) {
+            el.className = 'input-warning danger';
+            el.innerHTML = `⛔ PI Saldırısı Tespit Edildi: ${scanResult.findings.map(f => getCategoryLabel(f.category)).join(', ')}`;
+        } else if (scanResult.isSuspicious) {
+            el.className = 'input-warning caution';
+            el.innerHTML = `⚠️ Şüpheli Kalıp: ${scanResult.findings.map(f => getCategoryLabel(f.category)).join(', ')}`;
+        } else {
+            el.className = 'input-warning';
+            el.innerHTML = '';
+        }
+    }
+
+    function debounce(fn, delay) {
+        let timer;
+        return (...args) => {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn(...args), delay);
+        };
+    }
+
+    // ─── MAIN GENERATE HANDLER ───────────────────────────────
+    async function handleGenerate() {
+        const platform = document.getElementById('siem-platform').value;
+        const rawName = document.getElementById('rule-name').value;
+        const rawDetail = document.getElementById('rule-detail').value;
+
+        // Update UI
+        document.getElementById('codeLang').textContent = PLATFORM_LANG[platform] || platform.toUpperCase();
+
+        // Phase 1: Input Validation
+        if (!rawDetail.trim()) {
+            showToast('Lütfen kural detaylarını girin', 'error');
+            addLog('warn', 'Boş girdi ile üretim denemesi');
+            return;
+        }
+
+        state.scanned++;
+        addLog('info', `Girdi taraması başlatıldı — Platform: ${PLATFORM_LANG[platform]}`);
+
+        // Phase 2: Input Sanitization
+        const name = sanitizeInput(rawName);
+        const detail = sanitizeInput(rawDetail);
+        addLog('ok', 'Input sanitization tamamlandı');
+
+        // Phase 3: PI Scan
+        const nameScan = scanForPI(name);
+        const detailScan = scanForPI(detail);
+        const combinedScore = nameScan.riskScore + detailScan.riskScore;
+        const allFindings = [...nameScan.findings, ...detailScan.findings];
+
+        if (allFindings.length > 0) {
+            allFindings.forEach(f => {
+                addLog(f.severity === 'critical' ? 'block' : 'warn',
+                    `[${getCategoryLabel(f.category)}] Severity: ${f.severity.toUpperCase()} — Risk +${f.severity === 'critical' ? 40 : f.severity === 'high' ? 25 : 10}`);
+            });
+        }
+
+        // Phase 4: Block or Warn
+        if (combinedScore >= 25) {
+            state.blocked++;
+            updateStats();
+            addLog('block', `🚫 İstek ENGELLENDİ — Toplam Risk Skoru: ${combinedScore}/100`);
+            showToast('Prompt injection saldırısı tespit edildi ve engellendi!', 'error');
+
+            document.getElementById('codeOutput').innerHTML =
+                `<span style="color:var(--accent-red);">⛔ GÜVENLİK İHLALİ TESPİT EDİLDİ\n\nBu istek, aşağıdaki prompt injection kalıpları nedeniyle engellenmiştir:\n\n${allFindings.map(f => `• ${getCategoryLabel(f.category)} [${f.severity.toUpperCase()}]`).join('\n')}\n\nToplam Risk Skoru: ${combinedScore}/100\n\nLütfen meşru bir SIEM kural talebi girin.</span>`;
+
+            // Flash danger indicators
+            flashIndicator('indPIDetect', 'danger');
+            flashIndicator('indInputGuard', 'danger');
+            return;
+        }
+
+        if (combinedScore > 0) {
+            state.warnings++;
+            addLog('warn', `⚠️ Şüpheli kalıplar tespit edildi — Risk Skoru: ${combinedScore}/100 — İstek izin verildi`);
+            flashIndicator('indPIDetect', 'warning');
+        } else {
+            addLog('ok', '✅ PI taraması temiz — Risk Skoru: 0/100');
+        }
+
+        // Phase 5: Generate
+        const btn = document.getElementById('generateBtn');
+        btn.classList.add('loading');
+        btn.disabled = true;
+
+        addLog('info', 'AI kural üretimi başlatılıyor...');
+
+        try {
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    platform: platform,
+                    ruleName: name,
+                    detail: detail,
+                    piRiskScore: combinedScore,
+                    piFindings: allFindings.map(f => f.category)
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            // Phase 6: Output Validation
+            const outputValidation = validateOutput(data.rule, platform);
+
+            if (!outputValidation.valid) {
+                addLog('warn', `⚠️ Output validation uyarısı: ${outputValidation.reason}`);
+                flashIndicator('indOutputFilter', 'warning');
+            } else {
+                addLog('ok', '✅ Output validation başarılı');
+            }
+
+            // Display output
+            document.getElementById('codeOutput').textContent = data.rule;
+            document.getElementById('codeTimestamp').textContent = new Date().toLocaleTimeString('tr-TR');
+
+            state.generated++;
+            addLog('ok', `🎯 Kural başarıyla üretildi — Platform: ${PLATFORM_LANG[platform]}`);
+            showToast('Kural başarıyla oluşturuldu!');
+
+        } catch (error) {
+            addLog('block', `❌ Üretim hatası: ${error.message}`);
+            showToast(`Hata: ${error.message}`, 'error');
+            document.getElementById('codeOutput').innerHTML =
+                `<span style="color:var(--accent-red);">Hata: ${error.message}\n\nLütfen tekrar deneyin.</span>`;
+        } finally {
+            btn.classList.remove('loading');
+            btn.disabled = false;
+            updateStats();
+        }
+    }
+
+    function flashIndicator(id, state) {
+        const el = document.getElementById(id);
+        const original = el.className;
+        el.className = `sec-indicator ${state}`;
+        setTimeout(() => el.className = original, 5000);
+    }
+
+    // ─── INIT ────────────────────────────────────────────────
+    addLog('info', '🚀 Kural Büyücüsü v2.0 başlatıldı');
+    addLog('ok', '🛡️ PI Defense Engine aktif — Arcanum Taxonomy v1.5 yüklendi');
+    addLog('ok', '📊 5 savunma katmanı çevrimiçi: Input Sanitizer, PI Detector, Prompt Hardening, Output Validator, Audit Logger');
+    updateStats();
     </script>
 </body>
 </html>
